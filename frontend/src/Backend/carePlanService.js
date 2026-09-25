@@ -69,47 +69,186 @@ const MOCK_DASHBOARD = {
   highRiskPatients: 47
 };
 
-export async function generateCarePlan(patientId = 'saurabh') {
-  try {
-    const res = await fetch(`${ENDPOINTS.CAREPLAN}/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ patientId })
-    });
-    if (res.ok) return await res.json();
-  } catch (err) {
-    console.warn('Backend CarePlan generate offline, using fallback:', err.message);
+const activePlanStore = {};
+
+const PATIENT_PROFILES = {
+  saurabh: {
+    patientName: 'Saurabh Kumar',
+    riskLevel: 'HIGH',
+    riskScore: 24.3,
+    medicines: [
+      { name: 'Metformin', dosage: '500mg', frequency: 'Twice daily after meals', instructions: 'Take with food to prevent GI upset', active: true },
+      { name: 'Losartan', dosage: '50mg', frequency: 'Once daily morning', instructions: 'Monitor blood pressure regularly', active: true },
+      { name: 'Atorvastatin', dosage: '20mg', frequency: 'Once daily at bedtime', instructions: 'For lipid management', active: true }
+    ],
+    diet: ['Low Salt / Low Sodium (< 2g daily)', 'Strictly No Sugar & Refined Carbohydrates', 'High Fiber Vegetables & Whole Grains'],
+    exercise: ['Walk 30 mins daily', 'Yoga & Breathing Exercises - 20 mins'],
+    sleep: '8 Hours',
+    waterIntake: '3 Liters',
+    reviewPeriod: '30 Days',
+    doctorNotes: 'Patient exhibits high cardiovascular risk with pre-hypertension load. Initiate Metformin & Losartan, restrict sodium, review after 30 days.'
+  },
+  priya: {
+    patientName: 'Priya Verma',
+    riskLevel: 'MEDIUM',
+    riskScore: 18.7,
+    medicines: [
+      { name: 'Insulin Regular', dosage: '10 IU', frequency: 'Before breakfast', instructions: 'Subcutaneous injection as directed', active: true },
+      { name: 'Prenatal Multivitamin', dosage: '1 Tablet', frequency: 'Once daily', instructions: 'Take with lunch', active: true }
+    ],
+    diet: ['Low Glycemic Index Foods', 'Controlled Carbohydrate Portioning', 'Green Leafy Vegetables'],
+    exercise: ['Prenatal Yoga - 20 mins', 'Light Walking - 15 mins daily'],
+    sleep: '9 Hours',
+    waterIntake: '3.5 Liters',
+    reviewPeriod: '15 Days',
+    doctorNotes: 'Gestational glycemic monitoring required. Maintain strict dietary log.'
+  },
+  rahul: {
+    patientName: 'Rahul Sharma',
+    riskLevel: 'MEDIUM',
+    riskScore: 14.5,
+    medicines: [
+      { name: 'Budesonide Inhaler', dosage: '200mcg', frequency: 'Twice daily', instructions: 'Rinse mouth after inhalation', active: true },
+      { name: 'Montelukast', dosage: '10mg', frequency: 'Once daily at bedtime', instructions: 'For airway inflammation', active: true }
+    ],
+    diet: ['Anti-inflammatory Rich Foods', 'Vitamin C Rich Citrus Fruits', 'Avoid Cold Carbonated Drinks'],
+    exercise: ['Breathing Exercises / Pranayama - 25 mins', 'Gentle Evening Walk'],
+    sleep: '8 Hours',
+    waterIntake: '3 Liters',
+    reviewPeriod: '30 Days',
+    doctorNotes: 'Asthma maintenance plan. Monitor peak flow meter readings twice weekly.'
   }
-  return { ...MOCK_CARE_PLAN, patientId };
+};
+
+function createInitialPlan(patientId) {
+  const profile = PATIENT_PROFILES[patientId] || PATIENT_PROFILES['saurabh'];
+  return {
+    id: `cp-${patientId}-${Date.now().toString().slice(-4)}`,
+    patientId: patientId,
+    patientName: profile.patientName,
+    riskLevel: profile.riskLevel,
+    riskScore: profile.riskScore,
+    status: 'PENDING',
+    reviewPeriod: profile.reviewPeriod,
+    goals: [
+      'Reduce HbA1c below 6.5%',
+      'Maintain Systolic BP < 130 mmHg',
+      'Reduce Risk Score by 35%'
+    ],
+    medicines: profile.medicines,
+    diet: profile.diet,
+    exercise: profile.exercise,
+    sleep: profile.sleep,
+    waterIntake: profile.waterIntake,
+    doctorNotes: profile.doctorNotes,
+    doctorComments: [
+      { id: 'c1', author: 'AI Care Engine', role: 'SYSTEM', comment: 'AI Care Plan generated based on vitals and guidelines. Pending doctor approval.', timestamp: new Date().toISOString() }
+    ],
+    adherencePercentage: 0.0,
+    approvedBy: '',
+    approvedAt: null,
+    validations: {
+      clinicalGuidelineCheck: 'Passed',
+      drugInteractionCheck: 'No Interaction Found',
+      doctorApproval: 'Pending',
+      adherence: '0%',
+      outcomeTracking: 'Monitoring Initiated',
+      auditLog: 'Care Plan Generated -> Pending Doctor Approval'
+    }
+  };
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 1200) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timer);
+    return res;
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+}
+
+export async function generateCarePlan(patientId = 'saurabh') {
+  const generatedPlan = createInitialPlan(patientId);
+  generatedPlan.status = 'PENDING';
+  generatedPlan.validations.doctorApproval = 'Pending';
+  activePlanStore[patientId] = generatedPlan;
+
+  // Background async attempt if backend is active
+  fetch(`${ENDPOINTS.CAREPLAN}/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ patientId })
+  })
+    .then(res => res.ok ? res.json() : null)
+    .then(plan => {
+      if (plan) activePlanStore[patientId] = plan;
+    })
+    .catch(() => {});
+
+  return generatedPlan;
 }
 
 export async function fetchCarePlan(patientId = 'saurabh') {
-  try {
-    const res = await fetch(`${ENDPOINTS.CAREPLAN}/${patientId}`);
-    if (res.ok) return await res.json();
-  } catch (err) {
-    console.warn('Backend CarePlan fetch offline, using fallback:', err.message);
+  if (!activePlanStore[patientId]) {
+    if (patientId === 'saurabh') {
+      activePlanStore[patientId] = { ...MOCK_CARE_PLAN };
+    } else {
+      activePlanStore[patientId] = createInitialPlan(patientId);
+    }
   }
-  return MOCK_CARE_PLAN;
+
+  // Background async attempt if backend is active
+  fetch(`${ENDPOINTS.CAREPLAN}/${patientId}`)
+    .then(res => res.ok ? res.json() : null)
+    .then(plan => {
+      if (plan) activePlanStore[patientId] = plan;
+    })
+    .catch(() => {});
+
+  return activePlanStore[patientId];
 }
 
 export async function approveCarePlan(carePlanId, doctorName, doctorNotes, medicines) {
-  try {
-    const res = await fetch(`${ENDPOINTS.CAREPLAN}/approve`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ carePlanId, doctorName, doctorNotes, medicines })
-    });
-    if (res.ok) return await res.json();
-  } catch (err) {
-    console.warn('Backend CarePlan approve offline, using local state:', err.message);
-  }
-  return {
-    ...MOCK_CARE_PLAN,
+  const targetPatient = Object.keys(activePlanStore).find(pId => activePlanStore[pId].id === carePlanId) || 'saurabh';
+  const basePlan = activePlanStore[targetPatient] || MOCK_CARE_PLAN;
+
+  const approvedPlan = {
+    ...basePlan,
     status: 'APPROVED',
     approvedBy: doctorName || 'Dr. Sarah Johnson',
-    doctorNotes: doctorNotes || MOCK_CARE_PLAN.doctorNotes
+    approvedAt: new Date().toISOString(),
+    doctorNotes: doctorNotes || basePlan.doctorNotes,
+    medicines: medicines && medicines.length > 0 ? medicines : basePlan.medicines,
+    validations: {
+      ...(basePlan.validations || {}),
+      doctorApproval: 'Approved Successfully'
+    },
+    doctorComments: [
+      ...(basePlan.doctorComments || []),
+      {
+        id: Date.now().toString(),
+        author: doctorName || 'Dr. Sarah Johnson',
+        role: 'DOCTOR',
+        comment: 'Care plan approved successfully. Treatment regimen validated.',
+        timestamp: new Date().toISOString()
+      }
+    ]
   };
+
+  activePlanStore[targetPatient] = approvedPlan;
+
+  // Background async attempt if backend is active
+  fetch(`${ENDPOINTS.CAREPLAN}/approve`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ carePlanId, doctorName, doctorNotes, medicines })
+  }).catch(() => {});
+
+  return approvedPlan;
 }
 
 export async function updateProgress(carePlanId, tasks) {
@@ -155,15 +294,26 @@ export async function addDoctorComment(carePlanId, author, role, comment) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ carePlanId, author, role, comment })
     });
-    if (res.ok) return await res.json();
+    if (res.ok) {
+      const plan = await res.json();
+      if (plan.patientId) activePlanStore[plan.patientId] = plan;
+      return plan;
+    }
   } catch (err) {
     console.warn('Backend CarePlan comment offline, updating locally:', err.message);
   }
-  return {
-    ...MOCK_CARE_PLAN,
+
+  const targetPatient = Object.keys(activePlanStore).find(pId => activePlanStore[pId].id === carePlanId) || 'saurabh';
+  const basePlan = activePlanStore[targetPatient] || MOCK_CARE_PLAN;
+
+  const updatedPlan = {
+    ...basePlan,
     doctorComments: [
-      ...MOCK_CARE_PLAN.doctorComments,
+      ...(basePlan.doctorComments || []),
       { id: Date.now().toString(), author, role, comment, timestamp: new Date().toISOString() }
     ]
   };
+
+  activePlanStore[targetPatient] = updatedPlan;
+  return updatedPlan;
 }

@@ -1,9 +1,9 @@
 // API configuration pointing to local microservices or WebSocket endpoints
 
 export const API_BASE_URLS = {
-  HEALTHCARE_SERVICE: 'http://localhost:8081/api',
-  PREDICTION_SERVICE: 'http://localhost:8082/api',
-  MODEL_SERVICE: 'http://localhost:5000/api', // Python AI backend
+  HEALTHCARE_SERVICE: 'http://localhost:8080/api',
+  PREDICTION_SERVICE: 'http://localhost:8080/api',
+  MODEL_SERVICE: 'http://localhost:8086/api', // Python/Java AI backend
   KAFKA_WEBSOCKET: 'ws://localhost:8082/ws-vitals'
 };
 

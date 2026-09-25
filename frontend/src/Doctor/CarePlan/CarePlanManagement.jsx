@@ -52,8 +52,19 @@ export default function CarePlanManagement() {
 
   if (loading) {
     return (
-      <div style={{ padding: '2rem', color: '#fff', textAlign: 'center' }}>
-        <h2>Loading Care Plan...</h2>
+      <div style={{
+        padding: '3rem 2rem',
+        color: '#f8fafc',
+        textAlign: 'center',
+        background: '#0f172a',
+        borderRadius: '16px',
+        margin: '1.5rem',
+        border: '1px solid #334155',
+        boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)'
+      }}>
+        <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>📋</div>
+        <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '1.25rem' }}>Loading AI Care Plan...</h3>
+        <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: '0.5rem' }}>Evaluating clinical guidelines & patient vitals</p>
       </div>
     );
   }
@@ -300,18 +311,20 @@ export default function CarePlanManagement() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
               <button
                 onClick={handleApprove}
+                disabled={carePlan?.status === 'APPROVED'}
                 style={{
-                  background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                  background: carePlan?.status === 'APPROVED' ? '#15803d' : 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
                   color: '#fff',
                   border: 'none',
                   padding: '0.65rem 1.5rem',
                   borderRadius: '8px',
                   fontWeight: '700',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(34,197,94,0.4)'
+                  cursor: carePlan?.status === 'APPROVED' ? 'default' : 'pointer',
+                  opacity: carePlan?.status === 'APPROVED' ? 0.85 : 1,
+                  boxShadow: carePlan?.status === 'APPROVED' ? 'none' : '0 4px 12px rgba(34,197,94,0.4)'
                 }}
               >
-                ✓ Approve & Publish Care Plan
+                {carePlan?.status === 'APPROVED' ? '✓ Care Plan Approved & Published' : '✓ Approve & Publish Care Plan'}
               </button>
             </div>
           </div>

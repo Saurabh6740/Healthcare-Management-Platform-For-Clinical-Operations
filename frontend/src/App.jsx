@@ -3,6 +3,7 @@ import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import CriticalAlertModal from './components/CriticalAlertModal';
 import LoginPage from './components/LoginPage';
+import AccessDenied from './components/AccessDenied';
 
 // Services
 import { fetchDoctors } from './Backend/doctorService';
@@ -10,6 +11,7 @@ import { fetchPatients } from './Backend/patientService';
 import { fetchAlerts } from './Backend/alertService';
 import { vitalsStream } from './Kafka/vitalsStream';
 import { processVitalsForAnomalies } from './AI/anomalyDetector';
+import { getCurrentSession, logoutUser, hasRolePermission } from './Backend/authService';
 
 // Doctor Pages
 import DoctorDashboard from './Doctor/Dashboard/DoctorDashboard';
@@ -37,7 +39,6 @@ import CarePlanManagement from './Doctor/CarePlan/CarePlanManagement';
 import PatientCarePlanView from './Patient/CarePlan/PatientCarePlanView';
 import OutcomeTracking from './Doctor/CarePlan/OutcomeTracking';
 import CarePlanDashboard from './Doctor/CarePlan/CarePlanDashboard';
-import ValidationScreens from './Doctor/CarePlan/ValidationScreens';
 
 // Admin Pages
 import AdminDashboard from './Admin/Dashboard/AdminDashboard';
@@ -47,10 +48,18 @@ import AdminAlertManagement from './Admin/AlertManagement/AdminAlertManagement';
 import Reports from './Admin/Reports/Reports';
 
 export default function App() {
-  // Authentication & Session State
-  const [currentUser, setCurrentUser] = useState(null); // null shows LoginPage
-  const [currentRole, setCurrentRole] = useState('Doctor');
-  const [activeTab, setActiveTab] = useState('DoctorDashboard');
+  // Authentication & Session State with Persistent Restore
+  const [currentUser, setCurrentUser] = useState(() => getCurrentSession());
+  const [currentRole, setCurrentRole] = useState(() => {
+    const session = getCurrentSession();
+    return session?.role || 'Doctor';
+  });
+  const [activeTab, setActiveTab] = useState(() => {
+    const session = getCurrentSession();
+    if (session?.role === 'Admin') return 'AdminDashboard';
+    if (session?.role === 'Patient') return 'PatientDashboard';
+    return 'DoctorDashboard';
+  });
 
   // Application State
   const [doctors, setDoctors] = useState([]);
@@ -83,24 +92,36 @@ export default function App() {
   const [activeCriticalModalAlert, setActiveCriticalModalAlert] = useState(null);
   const [selectedPatientForAnomaly, setSelectedPatientForAnomaly] = useState(null);
 
-  // Initial Data Fetch
+  // Initial Data Fetch & URL Check
   useEffect(() => {
+    if (window.location.search.includes('logout=true')) {
+      logoutUser();
+      setCurrentUser(null);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
     fetchDoctors().then(setDoctors);
     fetchPatients().then(setPatients);
     fetchAlerts().then(setAlerts);
   }, []);
 
-  // Handle Login
+  // Handle Login and Direct Portal Routing
   const handleLogin = (userCredentials) => {
     setCurrentUser(userCredentials);
     setCurrentRole(userCredentials.role);
-    if (userCredentials.role === 'Doctor') setActiveTab('DoctorDashboard');
-    else if (userCredentials.role === 'Patient') setActiveTab('PatientDashboard');
-    else if (userCredentials.role === 'Admin') setActiveTab('AdminDashboard');
+
+    // Direct user strictly to their authorized portal
+    if (userCredentials.role === 'Admin') {
+      setActiveTab('AdminDashboard');
+    } else if (userCredentials.role === 'Patient') {
+      setActiveTab('PatientDashboard');
+    } else {
+      setActiveTab('DoctorDashboard');
+    }
   };
 
   // Handle Logout
   const handleLogout = () => {
+    logoutUser();
     setCurrentUser(null);
   };
 
@@ -187,6 +208,9 @@ export default function App() {
     return <LoginPage onLogin={handleLogin} doctors={doctors} patients={patients} />;
   }
 
+  // Authorization Check
+  const isAuthorized = hasRolePermission(currentRole, activeTab);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col selection:bg-cyan-500 selection:text-white">
       {/* Top Navbar */}
@@ -210,181 +234,188 @@ export default function App() {
 
         {/* Content Area */}
         <main className="flex-1 p-6 overflow-y-auto bg-slate-100 min-h-[calc(100vh-61px)] max-w-7xl mx-auto w-full">
-          {/* Doctor Portal */}
-          {currentRole === 'Doctor' && (
+          {/* RBAC Authorization Guard: Prevent Cross-Portal Access */}
+          {!isAuthorized ? (
+            <AccessDenied
+              currentRole={currentRole}
+              attemptedTab={activeTab}
+              onReturn={() => {
+                if (currentRole === 'Admin') setActiveTab('AdminDashboard');
+                else if (currentRole === 'Patient') setActiveTab('PatientDashboard');
+                else setActiveTab('DoctorDashboard');
+              }}
+            />
+          ) : (
             <>
-              {activeTab === 'CarePlanManagement' && (
-                <CarePlanManagement />
+              {/* Doctor Portal */}
+              {currentRole === 'Doctor' && (
+                <>
+                  {activeTab === 'CarePlanManagement' && (
+                    <CarePlanManagement />
+                  )}
+
+                  {activeTab === 'OutcomeTracking' && (
+                    <OutcomeTracking />
+                  )}
+
+                  {activeTab === 'CarePlanDashboard' && (
+                    <CarePlanDashboard />
+                  )}
+
+                  {activeTab === 'DoctorDashboard' && (
+                    <DoctorDashboard
+                      patients={patients}
+                      alerts={alerts}
+                      notifications={notifications}
+                      onSelectTab={setActiveTab}
+                      onSelectPatient={(pat) => {
+                        setSelectedPatientForAnomaly(pat);
+                        setActiveTab('AiAnomalyDetection');
+                      }}
+                    />
+                  )}
+
+                  {activeTab === 'AiAnomalyDetection' && (
+                    <AiAnomalyDetection
+                      patient={selectedPatientForAnomaly}
+                      onBack={() => setActiveTab('DoctorDashboard')}
+                    />
+                  )}
+
+                  {activeTab === 'LiveMonitoring' && (
+                    <LiveMonitoring
+                      currentVitals={currentVitals}
+                      vitalsHistory={vitalsHistory}
+                      isAutoRefresh={isLiveStreaming}
+                      toggleAutoRefresh={() => setIsLiveStreaming(!isLiveStreaming)}
+                      triggerSimulatedSpike={triggerSimulatedSpike}
+                    />
+                  )}
+
+                  {activeTab === 'Alerts' && (
+                    <AlertManagement
+                      alerts={alerts}
+                      onAcknowledgeAlert={handleAcknowledgeAlert}
+                      onCloseAlert={handleCloseAlert}
+                    />
+                  )}
+
+                  {activeTab === 'AlertHistory' && (
+                    <AlertHistory alerts={alerts} />
+                  )}
+
+                  {activeTab === 'DoctorNotifications' && (
+                    <DoctorNotifications notifications={notifications} />
+                  )}
+
+                  {activeTab === 'PatientMonitoring' && (
+                    <PatientMonitoring
+                      patients={patients}
+                      onSelectPatient={() => setActiveTab('LiveMonitoring')}
+                    />
+                  )}
+
+                  {activeTab === 'Reports' && (
+                    <Reports />
+                  )}
+
+                  {activeTab === 'Analytics' && (
+                    <DoctorAnalytics patients={patients} alerts={alerts} />
+                  )}
+
+                  {activeTab === 'Settings' && (
+                    <DoctorSettings />
+                  )}
+                </>
               )}
 
-              {activeTab === 'OutcomeTracking' && (
-                <OutcomeTracking />
+              {/* Patient Portal */}
+              {currentRole === 'Patient' && (
+                <>
+                  {activeTab === 'PatientDashboard' && (
+                    <PatientDashboard
+                      vitals={currentVitals}
+                      riskScore={riskScore}
+                      riskLevel={riskLevel}
+                      vitalsHistory={vitalsHistory}
+                      onEmergencyTrigger={triggerSimulatedSpike}
+                      patientName={currentUser?.name || "Patient"}
+                      currentUser={currentUser}
+                    />
+                  )}
+
+                  {activeTab === 'PatientCarePlan' && (
+                    <PatientCarePlanView />
+                  )}
+
+                  {activeTab === 'MyVitals' && (
+                    <MyVitals vitals={currentVitals} currentUser={currentUser} />
+                  )}
+
+                  {activeTab === 'Devices' && (
+                    <ConnectedDevices patientName={currentUser?.name || "Patient"} currentUser={currentUser} />
+                  )}
+
+                  {activeTab === 'History' && (
+                    <MedicalHistory currentUser={currentUser} />
+                  )}
+
+                  {activeTab === 'Alerts' && (
+                    <PatientAlerts alerts={alerts} currentUser={currentUser} />
+                  )}
+
+                  {activeTab === 'Medications' && (
+                    <PatientMedications currentUser={currentUser} />
+                  )}
+
+                  {activeTab === 'Profile' && (
+                    <PatientProfile patientName={currentUser?.name || "Patient"} currentUser={currentUser} />
+                  )}
+
+                  {activeTab === 'Settings' && (
+                    <PatientSettings currentUser={currentUser} />
+                  )}
+                </>
               )}
 
-              {activeTab === 'CarePlanDashboard' && (
-                <CarePlanDashboard />
-              )}
+              {/* Admin Portal */}
+              {currentRole === 'Admin' && (
+                <>
+                  {activeTab === 'AdminDashboard' && (
+                    <AdminDashboard
+                      doctors={doctors}
+                      patients={patients}
+                      alerts={alerts}
+                      onSelectTab={setActiveTab}
+                    />
+                  )}
 
-              {activeTab === 'ValidationScreens' && (
-                <ValidationScreens />
-              )}
+                  {activeTab === 'CarePlanDashboard' && (
+                    <CarePlanDashboard />
+                  )}
 
-              {activeTab === 'DoctorDashboard' && (
-                <DoctorDashboard
-                  patients={patients}
-                  alerts={alerts}
-                  notifications={notifications}
-                  onSelectTab={setActiveTab}
-                  onSelectPatient={(pat) => {
-                    setSelectedPatientForAnomaly(pat);
-                    setActiveTab('AiAnomalyDetection');
-                  }}
-                />
-              )}
+                  {activeTab === 'ManageDoctors' && (
+                    <ManageDoctors
+                      doctors={doctors}
+                      onAddDoctor={doc => setDoctors(prev => [...prev, doc])}
+                    />
+                  )}
 
-              {activeTab === 'AiAnomalyDetection' && (
-                <AiAnomalyDetection
-                  patient={selectedPatientForAnomaly}
-                  onBack={() => setActiveTab('DoctorDashboard')}
-                />
-              )}
+                  {activeTab === 'ManagePatients' && (
+                    <ManagePatients
+                      patients={patients}
+                      onAddPatient={pat => setPatients(prev => [...prev, pat])}
+                    />
+                  )}
 
-              {activeTab === 'LiveMonitoring' && (
-                <LiveMonitoring
-                  currentVitals={currentVitals}
-                  vitalsHistory={vitalsHistory}
-                  isAutoRefresh={isLiveStreaming}
-                  toggleAutoRefresh={() => setIsLiveStreaming(!isLiveStreaming)}
-                  triggerSimulatedSpike={triggerSimulatedSpike}
-                />
-              )}
+                  {activeTab === 'AdminAlertManagement' && (
+                    <AdminAlertManagement />
+                  )}
 
-              {activeTab === 'Alerts' && (
-                <AlertManagement
-                  alerts={alerts}
-                  onAcknowledgeAlert={handleAcknowledgeAlert}
-                  onCloseAlert={handleCloseAlert}
-                />
-              )}
-
-              {activeTab === 'AlertHistory' && (
-                <AlertHistory alerts={alerts} />
-              )}
-
-              {activeTab === 'DoctorNotifications' && (
-                <DoctorNotifications notifications={notifications} />
-              )}
-
-              {activeTab === 'PatientMonitoring' && (
-                <PatientMonitoring
-                  patients={patients}
-                  onSelectPatient={() => setActiveTab('LiveMonitoring')}
-                />
-              )}
-
-              {activeTab === 'Reports' && (
-                <Reports />
-              )}
-
-              {activeTab === 'Analytics' && (
-                <DoctorAnalytics patients={patients} alerts={alerts} />
-              )}
-
-              {activeTab === 'Settings' && (
-                <DoctorSettings />
-              )}
-            </>
-          )}
-
-          {/* Patient Portal */}
-          {currentRole === 'Patient' && (
-            <>
-              {activeTab === 'PatientDashboard' && (
-                <PatientDashboard
-                  vitals={currentVitals}
-                  riskScore={riskScore}
-                  riskLevel={riskLevel}
-                  vitalsHistory={vitalsHistory}
-                  onEmergencyTrigger={triggerSimulatedSpike}
-                  patientName={currentUser?.name || "Patient"}
-                  currentUser={currentUser}
-                />
-              )}
-
-              {activeTab === 'PatientCarePlan' && (
-                <PatientCarePlanView />
-              )}
-
-              {activeTab === 'MyVitals' && (
-                <MyVitals vitals={currentVitals} currentUser={currentUser} />
-              )}
-
-              {activeTab === 'Devices' && (
-                <ConnectedDevices patientName={currentUser?.name || "Patient"} currentUser={currentUser} />
-              )}
-
-              {activeTab === 'History' && (
-                <MedicalHistory currentUser={currentUser} />
-              )}
-
-              {activeTab === 'Alerts' && (
-                <PatientAlerts alerts={alerts} currentUser={currentUser} />
-              )}
-
-              {activeTab === 'Medications' && (
-                <PatientMedications currentUser={currentUser} />
-              )}
-
-              {activeTab === 'Profile' && (
-                <PatientProfile patientName={currentUser?.name || "Patient"} currentUser={currentUser} />
-              )}
-
-              {activeTab === 'Settings' && (
-                <PatientSettings currentUser={currentUser} />
-              )}
-            </>
-          )}
-
-          {/* Admin Portal */}
-          {currentRole === 'Admin' && (
-            <>
-              {activeTab === 'AdminDashboard' && (
-                <AdminDashboard
-                  doctors={doctors}
-                  patients={patients}
-                  alerts={alerts}
-                  onSelectTab={setActiveTab}
-                />
-              )}
-
-              {activeTab === 'CarePlanDashboard' && (
-                <CarePlanDashboard />
-              )}
-
-              {activeTab === 'ValidationScreens' && (
-                <ValidationScreens />
-              )}
-
-              {activeTab === 'ManageDoctors' && (
-                <ManageDoctors
-                  doctors={doctors}
-                  onAddDoctor={doc => setDoctors(prev => [...prev, doc])}
-                />
-              )}
-
-              {activeTab === 'ManagePatients' && (
-                <ManagePatients
-                  patients={patients}
-                  onAddPatient={pat => setPatients(prev => [...prev, pat])}
-                />
-              )}
-
-              {activeTab === 'AdminAlertManagement' && (
-                <AdminAlertManagement />
-              )}
-
-              {activeTab === 'Reports' && (
-                <Reports />
+                  {activeTab === 'Reports' && (
+                    <Reports />
+                  )}
+                </>
               )}
             </>
           )}
