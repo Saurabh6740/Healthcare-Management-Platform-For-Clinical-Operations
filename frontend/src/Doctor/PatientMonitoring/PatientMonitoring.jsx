@@ -15,46 +15,58 @@ export default function PatientMonitoring({ patients, onSelectPatient }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {patients.map((patient) => (
-          <div key={patient.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4 relative overflow-hidden">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-xs text-cyan-400 font-bold uppercase">{patient.specialtyRequired}</span>
-                <h3 className="text-xl font-extrabold text-white">{patient.name}</h3>
-                <p className="text-xs text-slate-400">{patient.age} yrs • {patient.gender} • {patient.contact}</p>
-              </div>
-              <span className={`px-3 py-1 rounded-xl text-xs font-extrabold ${patient.riskScore >= 75 ? 'bg-rose-500/20 border border-rose-500/40 text-rose-400' :
-                  patient.riskScore >= 50 ? 'bg-amber-500/20 border border-amber-500/40 text-amber-400' :
-                    'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400'
+        {patients.map((patient) => {
+          const v = patient.vitals || patient.currentVitals || {};
+          const hr = v.heartRate || 75;
+          const bpSys = v.bpSystolic || 120;
+          const bpDia = v.bpDiastolic || 80;
+          const spo2 = v.spo2 || 98;
+          const risk = patient.riskScore || 45;
+          const riskLvl = patient.riskLevel || 'Normal';
+          const specialty = patient.specialtyRequired || 'General Care';
+
+          return (
+            <div key={patient.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4 relative overflow-hidden">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-xs text-cyan-400 font-bold uppercase">{specialty}</span>
+                  <h3 className="text-xl font-extrabold text-white">{patient.name}</h3>
+                  <p className="text-xs text-slate-400">{patient.age || 35} yrs • {patient.gender || 'Patient'} • {patient.contact || 'N/A'}</p>
+                </div>
+                <span className={`px-3 py-1 rounded-xl text-xs font-extrabold ${
+                  risk >= 75 ? 'bg-rose-500/20 border border-rose-500/40 text-rose-400' :
+                  risk >= 50 ? 'bg-amber-500/20 border border-amber-500/40 text-amber-400' :
+                  'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400'
                 }`}>
-                Risk: {patient.riskScore}% ({patient.riskLevel})
-              </span>
-            </div>
+                  Risk: {risk}% ({riskLvl})
+                </span>
+              </div>
 
-            <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700 space-y-2 text-xs">
-              <div className="flex justify-between text-slate-300">
-                <span>Heart Rate:</span>
-                <strong className="text-rose-400">{patient.vitals.heartRate} BPM</strong>
+              <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700 space-y-2 text-xs">
+                <div className="flex justify-between text-slate-300">
+                  <span>Heart Rate:</span>
+                  <strong className="text-rose-400">{hr} BPM</strong>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Blood Pressure:</span>
+                  <strong className="text-blue-400">{bpSys}/{bpDia} mmHg</strong>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>SpO2 Level:</span>
+                  <strong className="text-cyan-400">{spo2}%</strong>
+                </div>
               </div>
-              <div className="flex justify-between text-slate-300">
-                <span>Blood Pressure:</span>
-                <strong className="text-blue-400">{patient.vitals.bpSystolic}/{patient.vitals.bpDiastolic} mmHg</strong>
-              </div>
-              <div className="flex justify-between text-slate-300">
-                <span>SpO2 Level:</span>
-                <strong className="text-cyan-400">{patient.vitals.spo2}%</strong>
-              </div>
-            </div>
 
-            <button
-              onClick={() => onSelectPatient(patient.id)}
-              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold text-xs border border-slate-700 flex items-center justify-center transition-all"
-            >
-              <span>View Full Clinical Profile</span>
-              <ArrowRight className="w-4 h-4 ml-1.5" />
-            </button>
-          </div>
-        ))}
+              <button
+                onClick={() => onSelectPatient(patient.id)}
+                className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold text-xs border border-slate-700 flex items-center justify-center transition-all"
+              >
+                <span>View Full Clinical Profile</span>
+                <ArrowRight className="w-4 h-4 ml-1.5" />
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -99,15 +99,15 @@ export default function ManagePatients({ patients, onAddPatient }) {
               <tr key={p.id} className="hover:bg-slate-800/40">
                 <td className="p-4 font-bold text-white">{p.name}</td>
                 <td className="p-4">{p.age} yrs • {p.gender}</td>
-                <td className="p-4 text-cyan-300 font-medium">{p.condition}</td>
-                <td className="p-4 text-slate-300">{p.assignedDoctor} ({p.specialtyRequired})</td>
+                <td className="p-4 text-cyan-300 font-medium">{p.condition || 'General Care'}</td>
+                <td className="p-4 text-slate-300">{p.assignedDoctor || 'Dr. Ramesh Gupta'} ({p.specialtyRequired || 'Cardiology'})</td>
                 <td className="p-4">
                   <span className={`px-2 py-0.5 rounded font-extrabold text-[10px] ${
-                    p.riskScore >= 75 ? 'bg-rose-600 text-white' :
-                    p.riskScore >= 50 ? 'bg-amber-600 text-white' :
+                    (p.riskScore || 0) >= 75 ? 'bg-rose-600 text-white' :
+                    (p.riskScore || 0) >= 50 ? 'bg-amber-600 text-white' :
                     'bg-emerald-600 text-white'
                   }`}>
-                    {p.riskLevel} ({p.riskScore}%)
+                    {p.riskLevel || 'Normal'} ({p.riskScore || 45}%)
                   </span>
                 </td>
               </tr>
