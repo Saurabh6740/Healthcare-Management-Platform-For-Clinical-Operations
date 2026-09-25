@@ -1,10 +1,11 @@
-// API configuration pointing to local microservices or WebSocket endpoints
+// API configuration pointing to live Railway cloud microservices
+const LIVE_BACKEND_URL = 'https://discerning-nourishment-production-ae12.up.railway.app/api';
 
 export const API_BASE_URLS = {
-  HEALTHCARE_SERVICE: 'http://localhost:8080/api',
-  PREDICTION_SERVICE: 'http://localhost:8080/api',
-  MODEL_SERVICE: 'http://localhost:8086/api', // Python/Java AI backend
-  KAFKA_WEBSOCKET: 'ws://localhost:8082/ws-vitals'
+  HEALTHCARE_SERVICE: LIVE_BACKEND_URL,
+  PREDICTION_SERVICE: LIVE_BACKEND_URL,
+  MODEL_SERVICE: 'http://localhost:8086/api', // Python AI backend
+  KAFKA_WEBSOCKET: 'wss://discerning-nourishment-production-ae12.up.railway.app/ws-vitals'
 };
 
 export const ENDPOINTS = {
