@@ -23,11 +23,10 @@ export default function PatientMonitoring({ patients, onSelectPatient }) {
                 <h3 className="text-xl font-extrabold text-white">{patient.name}</h3>
                 <p className="text-xs text-slate-400">{patient.age} yrs • {patient.gender} • {patient.contact}</p>
               </div>
-              <span className={`px-3 py-1 rounded-xl text-xs font-extrabold ${
-                patient.riskScore >= 75 ? 'bg-rose-500/20 border border-rose-500/40 text-rose-400' :
-                patient.riskScore >= 50 ? 'bg-amber-500/20 border border-amber-500/40 text-amber-400' :
-                'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400'
-              }`}>
+              <span className={`px-3 py-1 rounded-xl text-xs font-extrabold ${patient.riskScore >= 75 ? 'bg-rose-500/20 border border-rose-500/40 text-rose-400' :
+                  patient.riskScore >= 50 ? 'bg-amber-500/20 border border-amber-500/40 text-amber-400' :
+                    'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400'
+                }`}>
                 Risk: {patient.riskScore}% ({patient.riskLevel})
               </span>
             </div>
